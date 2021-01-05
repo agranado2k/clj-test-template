@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clj-pipeline
+  labels:
+    app: clj-pipeline
+spec:
+  selector:
+    matchLabels:
+      app: clj-pipeline
+  template:
+    metadata:
+      labels:
+        app: clj-pipeline
+    spec:
+      containers:
+      - name: clj-pipeline
+        image: agranado2k/pipeline:0.0.1-SNAPSHOT
+        ports:
+        - containerPort: 3000
+        env:
+        - name: database-url
+          value: jdbc:h2:./guestbook.db
