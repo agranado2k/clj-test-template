@@ -1,0 +1,38 @@
+# Clojure CircleCI 2.0 configuration file
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/openjdk-8-lein-2.9.5
+    working_directory: ~/repo
+    environment:
+      LEIN_ROOT: "true"
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      DOCKER_IMAGE: "agranado/pineline-test-"
+      RELEASE_TAG: ""
+      DOCKER_TAG: $CIRCLE_SHA1
+    steps:
+      - checkout
+      # Download and cache dependencies
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "project.clj" }}
+      - run: lein deps
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-dependencies-{{ checksum "project.clj" }}
+      # run lint
+      - run: lein eastwood
+      # run tests!
+      - run: lein test
+      - run: npx semantic-release
+      - run : TAG=$(scripts/get-git-label-version.sh $CIRCLE_SHA1) && DOCKER_TAG="${TAG}-${CIRCLE_SHA1}"
+      - run: docker build . -t {{ $DOCKER_IMAGE }}:{{ $DOCKER_TAG }}
+      - run: docker push {{ $DOCKER_IMAGE }}:{{ $DOCKER_TAG }}
+workflows:
+  version: 2
+  build_and_deployment:
+    jobs:
+      - build
