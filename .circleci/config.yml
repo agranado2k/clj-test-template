@@ -1,6 +1,77 @@
-# Clojure CircleCI 2.0 configuration file
-version: 2
+---
+version: 2.1
+commands:
+  install_project_deps:
+    description: Install Clojure dependencies via lein
+    steps:
+      - restore_cache:
+          keys:
+            - v1-dependencies-{{ checksum "project.clj" }}
+      - run: lein deps
+      - save_cache:
+          paths:
+            - ~/.m2
+          key: v1-dependencies-{{ checksum "project.clj" }}
+
+  install_node_and_npm:
+    description: Install Node and NPM
+    steps:
+      - run: 
+          name: Install NodeJS and NPM
+          command: sudo apt update && sudo apt install nodejs npm && npm install
+
 jobs:
+  lint:
+    docker:
+      - image: circleci/clojure:openjdk-8-lein-2.9.5 
+    working_directory: ~/repo
+    environment:
+      LEIN_ROOT: "true"
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      DOCKER_IMAGE: "agranado2k/pipeline-test"
+    steps:
+      - checkout
+      - install_project_deps
+      - run: 
+          name: Run lint
+          command: lein eastwood 
+
+  tests:
+    docker:
+      - image: circleci/clojure:openjdk-8-lein-2.9.5 
+    working_directory: ~/repo
+    environment:
+      LEIN_ROOT: "true"
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      DOCKER_IMAGE: "agranado2k/pipeline-test"
+    steps:
+      - checkout
+      - install_project_deps
+      - run: 
+          name: Run unit tests 
+          command: lein test
+
+  build_image:
+    docker:
+      - image: circleci/clojure:openjdk-8-lein-2.9.5 
+    working_directory: ~/repo
+    environment:
+      LEIN_ROOT: "true"
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+      DOCKER_IMAGE: "agranado2k/pipeline-test"
+    steps:
+      - checkout
+      - setup_remote_docker:
+          version: 19.03.13
+      - install_project_deps
+      - install_node_and_npm
+      - run: 
+          name: Build and push container image
+          command: ./scripts/build-push-image.sh "$DOCKER_IMAGE" "$CIRCLE_SHA1"
+
   build:
     docker:
       - image: circleci/clojure:openjdk-8-lein-2.9.5 
@@ -34,7 +105,11 @@ jobs:
       - run: echo "DOCKER_TAG=${DOCKER_TAG}"
       
 workflows:
-  version: 2
   build_and_deployment:
     jobs:
-      - build
+      - lint
+      - tests
+      - build_image:
+          requires:
+            - lint
+            - tests
